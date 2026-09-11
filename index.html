@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>人生重开模拟器</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: linear-gradient(160deg, #12121f 0%, #1a1430 60%, #12121f 100%);
+    color: #e6e6f0;
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    min-height: 100vh;
+    display: flex; justify-content: center;
+  }
+  #app {
+    width: 100%; max-width: 560px;
+    padding: 20px 16px 40px;
+    display: flex; flex-direction: column; min-height: 100vh;
+  }
+  h1 {
+    text-align: center; font-size: 26px; margin: 20px 0 6px;
+    background: linear-gradient(90deg, #7c6cff, #c86bff, #ffb020);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    letter-spacing: 4px;
+  }
+  .subtitle { text-align: center; color: #6b6b85; font-size: 13px; margin-bottom: 24px; }
+  .screen { display: none; flex: 1; flex-direction: column; }
+  .screen.active { display: flex; }
+  .btn {
+    display: block; width: 100%; padding: 14px; margin-top: 14px;
+    border: none; border-radius: 12px; font-size: 16px; cursor: pointer;
+    background: linear-gradient(90deg, #6c5ce7, #8e6bff); color: #fff;
+    transition: transform .1s, opacity .2s;
+  }
+  .btn:hover { transform: translateY(-1px); opacity: .92; }
+  .btn:disabled { opacity: .35; cursor: not-allowed; transform: none; }
+  .btn.ghost { background: transparent; border: 1px solid #4a4a6a; color: #a8a8c4; }
+  .btn.small { padding: 9px; font-size: 13px; margin-top: 8px; }
+  /* 天赋 */
+  .tip { color: #8f8fae; font-size: 13px; margin: 8px 0 12px; text-align: center; }
+  #talentGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .talent {
+    background: #1e1e32; border: 1px solid #33334f; border-radius: 10px;
+    padding: 10px 12px; cursor: pointer; transition: border-color .15s, background .15s;
+    position: relative;
+  }
+  .talent:hover { border-color: #6c5ce7; }
+  .talent.picked { background: #26234a; border-color: #7c6cff; }
+  .talent.picked::after {
+    content: "✓"; position: absolute; top: 6px; right: 8px; color: #ffb020; font-weight: bold;
+  }
+  .talent .tname { font-size: 14px; font-weight: bold; }
+  .talent .tdesc { font-size: 12px; color: #8f8fae; margin-top: 4px; line-height: 1.4; }
+  .talent .trarity { font-size: 10px; position: absolute; bottom: 8px; right: 10px; opacity: .8; }
+  /* 属性分配 */
+  .alloc-row {
+    display: flex; align-items: center; justify-content: space-between;
+    background: #1e1e32; border-radius: 10px; padding: 12px 16px; margin-bottom: 10px;
+  }
+  .alloc-row .pname { font-size: 15px; width: 60px; }
+  .alloc-row .pval { font-size: 20px; font-weight: bold; color: #ffb020; width: 40px; text-align: center; }
+  .stepper { display: flex; gap: 10px; }
+  .stepper button {
+    width: 34px; height: 34px; border-radius: 8px; border: 1px solid #4a4a6a;
+    background: #262640; color: #fff; font-size: 18px; cursor: pointer;
+  }
+  .stepper button:disabled { opacity: .3; cursor: not-allowed; }
+  #pointsLeft { text-align: center; font-size: 15px; margin: 10px 0; color: #cfcfe8; }
+  #pointsLeft b { color: #ffb020; font-size: 20px; }
+  /* 人生屏 */
+  #hud {
+    position: sticky; top: 0; z-index: 5;
+    background: rgba(18,18,31,.92); backdrop-filter: blur(6px);
+    display: flex; gap: 8px; padding: 10px 0; border-bottom: 1px solid #2a2a44;
+  }
+  .chip {
+    flex: 1; text-align: center; background: #1e1e32; border-radius: 8px; padding: 6px 2px;
+  }
+  .chip .cl { font-size: 11px; color: #8f8fae; }
+  .chip .cv { font-size: 16px; font-weight: bold; }
+  .chip .cv.bump { animation: bump .5s; }
+  @keyframes bump { 0%{transform:scale(1)} 40%{transform:scale(1.4)} 100%{transform:scale(1)} }
+  #logBox {
+    flex: 1; overflow-y: auto; padding: 14px 4px; max-height: 60vh;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .line {
+    background: #1b1b2e; border-radius: 8px; padding: 9px 12px;
+    font-size: 14px; line-height: 1.6; animation: fadein .4s;
+    border-left: 3px solid #3d3d5c;
+  }
+  .line.milestone { border-left-color: #ffb020; background: #221f36; }
+  .line.death { border-left-color: #ff5a5a; background: #2e1f2a; color: #ffb8b8; }
+  .line.good { border-left-color: #ffd070; }
+  @keyframes fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; } }
+  .delta { display: inline-block; font-size: 11px; padding: 0 6px; margin-left: 6px; border-radius: 6px; vertical-align: middle; }
+  .delta.up { color: #ff8080; background: rgba(255,90,90,.12); }
+  .delta.down { color: #63e6a0; background: rgba(76,217,123,.12); }
+  .ageTag { color: #6c6c8e; font-size: 12px; margin-right: 6px; }
+  #lifeControls { display: flex; gap: 8px; }
+  #lifeControls .btn { margin-top: 8px; }
+  /* 结算 */
+  #summaryCard {
+    background: linear-gradient(160deg, #232040, #1a1830);
+    border: 1px solid #453a7a; border-radius: 16px; padding: 26px 20px; text-align: center;
+  }
+  #sumTitle { font-size: 24px; font-weight: bold; color: #ffd070; margin-bottom: 8px; }
+  #sumScore { font-size: 40px; font-weight: bold; color: #fff; margin: 8px 0; }
+  #sumScore small { font-size: 14px; color: #8f8fae; }
+  .sumGrid { display: flex; justify-content: space-around; margin: 18px 0; }
+  .sumGrid .cell .l { font-size: 12px; color: #8f8fae; }
+  .sumGrid .cell .v { font-size: 20px; font-weight: bold; color: #ffb020; }
+  #achList { text-align: left; font-size: 13px; color: #c5c5de; line-height: 2; margin-top: 6px; }
+  #achList li { list-style: none; }
+  #achList li::before { content: "🏆 "; }
+  .warn { color: #ff9a9a; font-size: 12px; text-align: center; height: 16px; margin-top: 6px; }
+  footer { text-align: center; color: #4a4a66; font-size: 11px; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <h1>人生重开模拟器</h1>
+  <div class="subtitle">如果你的人生可以重来一次……</div>
+
+  <!-- 屏0：开始 -->
+  <div id="scr-start" class="screen active">
+    <p style="text-align:center;color:#8f8fae;line-height:2;margin-top:30px">
+      抽取天赋，分配属性，<br>然后看着你的一生从眼前流过。<br><br>
+      有人锦鲤附体富甲一方，<br>有人天煞孤星却大器晚成，<br>有人修炼一生只为渡劫飞升。<br><br>
+      你的下一次人生，会是什么样？
+    </p>
+    <button class="btn" id="btnStart">开启新人生</button>
+  </div>
+
+  <!-- 屏1：天赋 -->
+  <div id="scr-talent" class="screen">
+    <div class="tip">从以下 10 个天赋中挑选 <b style="color:#ffb020">3</b> 个（还可免费重抽 <span id="rerollLeft">1</span> 次）</div>
+    <div id="talentGrid"></div>
+    <div class="warn" id="talentWarn"></div>
+    <button class="btn ghost" id="btnReroll">重抽天赋</button>
+    <button class="btn" id="btnTalentOk" disabled>确认天赋</button>
+  </div>
+
+  <!-- 屏2：属性 -->
+  <div id="scr-alloc" class="screen">
+    <div class="tip">分配 <b style="color:#ffb020">20</b> 点属性（每项上限 10，天赋加成会在出生时叠加）</div>
+    <div id="allocBox"></div>
+    <div id="pointsLeft"></div>
+    <button class="btn ghost" id="btnRandomAlloc">随机分配</button>
+    <button class="btn" id="btnGo">开始新人生！</button>
+  </div>
+
+  <!-- 屏3：人生 -->
+  <div id="scr-life" class="screen">
+    <div id="hud"></div>
+    <div id="logBox"></div>
+    <div id="lifeControls">
+      <button class="btn small" id="btnSpeed">⏩ 加速</button>
+      <button class="btn small" id="btnSkip">跳过 >> </button>
+      <button class="btn small ghost" id="btnBackToEnd" style="display:none">← 查看结局</button>
+    </div>
+  </div>
+
+  <!-- 屏4：结算 -->
+  <div id="scr-end" class="screen">
+    <div id="summaryCard">
+      <div style="font-size:13px;color:#8f8fae">—— 本世结局 ——</div>
+      <div id="sumTitle"></div>
+      <div id="sumScore"></div>
+      <div class="sumGrid" id="sumGrid"></div>
+      <div id="sumCause" style="font-size:13px;color:#8f8fae"></div>
+      <ul id="achList"></ul>
+    </div>
+    <button class="btn ghost" id="btnReview">📜 回顾一生</button>
+    <button class="btn" id="btnRestart">不甘心？重开！</button>
+  </div>
+
+  <footer>灵感来自开源游戏《人生重开模拟器》 · 本地运行 · 无需联网</footer>
+</div>
+
+<script>
+"use strict";
+// ==================== 工具 ====================
+function rnd(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+function cap10(v) { return Math.max(0, Math.min(10, v)); }
+function pickWeighted(arr, wf) {
+  let total = 0;
+  for (const it of arr) total += wf(it);
+  let x = Math.random() * total;
+  for (const it of arr) { x -= wf(it); if (x <= 0) return it; }
+  return arr[arr.length - 1];
+}
+
+// ==================== 稀有度 ====================
+const RARITY = {
+  c: { name: "普通", color: "#9aa5b5", w: 100 },
+  r: { name: "稀有", color: "#4aa3ff", w: 42 },
+  e: { name: "史诗", color: "#b26bff", w: 16 },
+  l: { name: "传说", color: "#ffb020", w: 6 }
+};
+
+// ==================== 天赋池 ====================
+// n:名称 d:描述 r:稀有度 eff:属性加成 life:寿命加成 sp:特殊机制 id
+const TALENTS = [
+  // 普通
+  { id: "beauty",  n: "天生丽质", d: "颜值 +2", r: "c", eff: { app: 2 } },
+  { id: "smart",   n: "头脑聪明", d: "智力 +2", r: "c", eff: { int: 2 } },
+  { id: "iron",    n: "钢筋铁骨", d: "体质 +2", r: "c", eff: { str: 2 } },
+  { id: "richkid", n: "家境殷实", d: "家境 +2", r: "c", eff: { money: 2 } },
+  { id: "zuotijia",n: "小镇做题家", d: "智力 +1，考试发挥更稳定", r: "c", eff: { int: 1 }, sp: "zuotijia" },
+  { id: "sunny",   n: "阳光开朗", d: "颜值 +1，童年好运更多", r: "c", eff: { app: 1 }, sp: "sunny" },
+  { id: "eater",   n: "能吃是福", d: "体质 +1，干饭永不认输", r: "c", eff: { str: 1 } },
+  { id: "onlyson", n: "独生子女", d: "家境 +1，独享全家的爱", r: "c", eff: { money: 1 } },
+  { id: "plain",   n: "平淡是福", d: "无加成，但寿命 +8", r: "c", life: 8 },
+  { id: "nightowl",n: "夜猫子", d: "智力 +1，体质 -1，凌晨三点睡", r: "c", eff: { int: 1, str: -1 } },
+  { id: "social",  n: "社交达人", d: "走到哪都有朋友，职场顺风", r: "c", sp: "social" },
+  // 稀有
+  { id: "xueba",   n: "学霸体质", d: "智力 +1，考试大幅加成", r: "r", eff: { int: 1 }, sp: "xueba" },
+  { id: "taohua",  n: "桃花运", d: "颜值 +1，恋爱事件频发", r: "r", eff: { app: 1 }, sp: "taohua" },
+  { id: "longlife",n: "长寿基因", d: "寿命 +15", r: "r", life: 15 },
+  { id: "business",n: "商业头脑", d: "智力 +1，赚钱事件加成", r: "r", eff: { int: 1 }, sp: "business" },
+  { id: "athlete", n: "运动健将", d: "体质 +2，体育事件加成", r: "r", eff: { str: 2 }, sp: "athlete" },
+  { id: "grandma", n: "奶奶的疼爱", d: "家境 +2，体质 +1", r: "r", eff: { money: 2, str: 1 } },
+  { id: "hexagon", n: "六边形战士", d: "四项属性各 +1", r: "r", eff: { app: 1, int: 1, str: 1, money: 1 } },
+  { id: "artist",  n: "天生歌喉", d: "颜值 +1，艺术事件加成", r: "r", eff: { app: 1 }, sp: "artist" },
+  { id: "sickpretty", n: "病弱美人", d: "颜值 +2，体质 -3，红颜薄命？", r: "r", eff: { app: 2, str: -3 } },
+  // 史诗
+  { id: "shidai",  n: "时代弄潮儿", d: "总能踩中时代红利", r: "e", sp: "shidai" },
+  { id: "tianxuan",n: "天选之子", d: "每年有小概率触发好运", r: "e", sp: "tianxuan" },
+  { id: "richboss",n: "富商转世", d: "家境 +4", r: "e", eff: { money: 4 } },
+  { id: "wuxue",   n: "武学奇才", d: "体质 +3，少年时有奇遇", r: "e", eff: { str: 3 }, sp: "wuxue" },
+  { id: "guxing",  n: "天煞孤星", d: "灾祸缠身，但每次挫折都让你更强", r: "e", sp: "guxing" },
+  { id: "otherkid",n: "别人家的孩子", d: "智力 +2，颜值 +1", r: "e", eff: { int: 2, app: 1 } },
+  { id: "zao夭",   n: "早夭之相", d: "智力 +4，体质 -4，向死而生", r: "e", eff: { int: 4, str: -4 } },
+  // 传说
+  { id: "jinli",   n: "锦鲤附体", d: "好运事件概率大增，灾祸绕道走", r: "l", sp: "jinli" },
+  { id: "xiuxian", n: "修仙奇才", d: "寿命 +20，80 岁后可尝试渡劫飞升", r: "l", life: 20, sp: "xiuxian" },
+  { id: "fuers",   n: "首富之子", d: "家境 +6，一出生就赢了", r: "l", eff: { money: 6 } },
+  { id: "shengti", n: "天生圣体", d: "四项属性各 +2", r: "l", eff: { app: 2, int: 2, str: 2, money: 2 } }
+];
+
+// ==================== 事件池 ====================
+// a:[minAge,maxAge] m:里程碑(优先) w:权重 c:条件 t:文本(可函数) e:效果(对象/函数) f:副作用 once:一次性
+let _eid = 0;
+function E(o) { o.id = _eid++; return o; }
+
+const EVENTS = [
+  // ---------- 出生 ----------
+  E({ a: [0, 0], m: 1, once: 1, w: 999, t: s =>
+    s.money >= 9 ? "你出生在市中心顶级别墅里，啼哭声都透着金贵。"
+    : s.money >= 6 ? "你出生在一个富裕家庭，含着金汤匙长大。"
+    : s.money >= 3 ? "你出生在一个普通家庭，父母攒了半年钱给你买婴儿床。"
+    : s.money >= 1 ? "你出生在一个拮据的家庭，但家人把最好的都留给你。"
+    : "你出生在深山里的贫苦农家，村口算命先生说：这孩子有大气运。" }),
+
+  // ---------- 幼年 1-5 ----------
+  E({ a: [1, 2], w: 30, t: "你学会了走路，家里的茶几遭了殃。" }),
+  E({ a: [1, 3], w: 20, c: s => s.str <= 2, t: "你三天两头生病，医院成了第二个家。", e: { str: -1 } }),
+  E({ a: [2, 3], w: 20, t: "你开口说的第一个词不是爸爸妈妈，是「饭」。" }),
+  E({ a: [3, 5], w: 20, c: s => s.money >= 6, t: "你被送进双语幼儿园，同学家里都住着大平层。", e: { int: 1 } }),
+  E({ a: [3, 5], w: 20, c: s => s.money < 3, t: "你在村口的泥地里和泥巴，捏了一座城堡。", e: { int: 1 } }),
+  E({ a: [4, 5], w: 15, c: s => s.app >= 6, t: "邻居阿姨逢人就说：这孩子长得真俊！", e: { app: 1 } }),
+  E({ a: [4, 6], w: 12, c: s => s.sp.has("jinli"), t: "你在路边捡到一个钱包，交给警察后失主送了你一箱牛奶。", e: { int: 1 } }),
+  E({ a: [5, 6], w: 15, c: s => s.money >= 7, t: "家里生意越做越大，你成了幼儿园里最靓的仔。", e: { money: 1 } }),
+
+  // ---------- 小学 6-11 ----------
+  E({ a: [6, 6], m: 1, once: 1, w: 999, t: "你背上小书包，成为了一名光荣的小学生。" }),
+  E({ a: [7, 10], w: 22, c: s => s.int >= 6, t: "你的成绩名列前茅，常被老师当众表扬。", e: { int: 1 } }),
+  E({ a: [7, 10], w: 22, c: s => s.int <= 3, t: "你的成绩单让家长会变成了家长「批斗会」。", e: { int: -1 } }),
+  E({ a: [8, 10], w: 18, c: s => s.str >= 6 || s.sp.has("athlete"), t: "运动会上一骑绝尘，你拿了三块金牌。", e: { str: 1 } }),
+  E({ a: [8, 10], w: 14, c: s => s.money >= 6, t: "你开始学钢琴，指法优雅但内心崩溃。", e: { int: 1, app: 1 } }),
+  E({ a: [9, 11], w: 18, t: "你交到了一辈子的好朋友，你们约定长大一起闯天下。" }),
+  E({ a: [9, 11], w: 14, c: s => s.str <= 2, t: "你被高年级的同学堵在墙角，回家不敢说。", e: { app: -1 } }),
+  E({ a: [10, 11], w: 15, c: s => s.int >= 7, t: "你考了双百，全校广播点名表扬。", e: { int: 1 } }),
+  E({ a: [10, 11], w: 15, t: "你迷上了电子游戏，成绩悄悄下滑。", e: { int: -1 } }),
+  E({ a: [11, 11], w: 10, c: s => s.sp.has("wuxue"), once: 1, t: "公园里一位白发老者拦住你：小朋友，你骨骼清奇，跟我练拳吧。从此你闻鸡起舞。", e: { str: 2 } }),
+
+  // ---------- 初中 12-14 ----------
+  E({ a: [12, 12], m: 1, once: 1, t: "你升入了初中，身高猛蹿，青春来了。" }),
+  E({ a: [12, 13], w: 18, t: "青春期痘痘大爆发，你不敢抬头走路。", e: { app: -1 } }),
+  E({ a: [12, 14], w: 16, c: s => s.str >= 6, t: "你成了校篮球队主力，场边总有女生喊你名字。", e: { str: 1, app: 1 } }),
+  E({ a: [13, 14], w: 16, c: s => s.int >= 8, t: "你拿了奥数一等奖，奖状贴满了家里整面墙。", e: { int: 1 } }),
+  E({ a: [13, 15], w: 16, c: s => s.int <= 4, t: "你沉迷网吧，被班主任从游戏厅里当场抓获。", e: { int: -1 } }),
+  E({ a: [14, 15], w: 14, c: s => s.app >= 6 || s.sp.has("taohua"), f: s => { s.flags.love = true; }, t: "你情窦初开，和同班同学开始了青涩的早恋。" }),
+  E({ a: [14, 15], w: 14, c: s => s.sp.has("artist"), t: "校园歌手大赛你一开口，全场尖叫。", e: { app: 1 } }),
+
+  // ---------- 高中 15-17 ----------
+  E({ a: [15, 15], m: 1, once: 1, t: s => {
+    if (s.int >= 7 || s.sp.has("xueba")) { s.flags.high = 1; return "中考你以全校前十的成绩考进重点高中。"; }
+    if (s.int >= 3) { s.flags.high = 0; return "你考上了普通高中，开启了三年的刷题生涯。"; }
+    s.flags.high = -1; return "你进了职业高中，学了一门实在的手艺。";
+  } }),
+  E({ a: [16, 17], w: 20, c: s => s.flags.high >= 0, t: "高三的卷子堆得比头还高，你凌晨一点还在背单词。", e: { str: -1 } }),
+  E({ a: [16, 17], w: 14, c: s => s.flags.love, t: "你和隔壁班的早恋对象被班主任抓了个正着，请了双方家长。" }),
+  E({ a: [16, 17], w: 12, c: s => s.flags.love && s.app >= 7, t: "你和恋人约定：考同一座城市。", e: { int: 1 } }),
+  E({ a: [17, 17], w: 15, t: "你参加了成人礼，在操场上对着天空大喊：我十八岁了！" }),
+
+  // ---------- 高考 18 ----------
+  E({ a: [18, 18], m: 1, once: 1, w: 999, t: s => {
+    let x = s.int + (s.sp.has("xueba") ? 2 : 0) + (s.sp.has("zuotijia") ? 1 : 0);
+    if (x >= 9) { s.flags.edu = 4; return "高考放榜，你被顶尖名校王牌专业录取，全村放起了鞭炮！"; }
+    if (x >= 7) { s.flags.edu = 3; return "你考上了重点大学，父母笑得合不拢嘴，摆了三天升学宴。"; }
+    if (x >= 4) { s.flags.edu = 2; return "你考上了一所普通本科，开始憧憬大学生活。"; }
+    if (x >= 2) { s.flags.edu = 1; return "你考上了一所大专，暗暗发誓以后要专升本。"; }
+    s.flags.edu = 0; return "你高考落榜了，收拾行李决定南下打工。";
+  } }),
+
+  // ---------- 大学 19-21 ----------
+  E({ a: [19, 19], m: 1, once: 1, t: s => {
+    if (s.flags.edu === 4) return "你拖着行李箱走进顶尖名校，室友已经开始讨论科研了。";
+    if (s.flags.edu === 3) return "你进入重点大学，社团招新的摊位排成了长龙。";
+    if (s.flags.edu === 2) return "你开始了普通本科生活，宿舍夜谈是每天的保留节目。";
+    if (s.flags.edu === 1) return "你在大专里加入了街舞社，生活倒也快活。";
+    return "打工间隙你报了夜校，想着改变命运。";
+  } }),
+  E({ a: [19, 21], w: 16, c: s => !s.flags.love && (s.app >= 5 || s.sp.has("taohua")) && s.flags.edu > 0, f: s => { s.flags.love = true; }, t: "大学里你遇到了心动的人，你们在图书馆交换了微信。" }),
+  E({ a: [20, 21], w: 15, c: s => s.int >= 7 && s.flags.edu > 0, t: "你连续两年拿了国家奖学金。", e: { money: 1, int: 1 } }),
+  E({ a: [20, 21], w: 15, c: s => s.int <= 5 && s.flags.edu > 0, t: "期末你挂了两科，在补考边缘反复横跳。", e: { int: 1 } }),
+  E({ a: [21, 21], w: 14, c: s => s.flags.edu >= 2, t: "你进入大厂实习，第一次体验了早八晚九的生活。", e: { str: -1, int: 1 } }),
+
+  // ---------- 毕业 22 ----------
+  E({ a: [22, 22], m: 1, once: 1, w: 999, t: s => {
+    switch (s.flags.edu) {
+      case 4: s.flags.job = "elite"; return "你从顶尖名校毕业，手握大厂 SSP offer，起薪碾压同龄人。";
+      case 3: s.flags.job = "white"; return "你重点大学毕业，进入一家不错的公司，成为了一名白领。";
+      case 2: s.flags.job = "white"; return "本科毕业，你找到一份普通但稳定的工作。";
+      case 1: s.flags.job = "blue"; return "大专毕业后你进了一家工厂当技术员，手艺扎实。";
+      default: s.flags.job = "blue"; return "打工几年后你用积蓄学了门手艺，准备重新出发。";
+    }
+  } }),
+
+  // ---------- 青年 23-29 ----------
+  E({ a: [23, 25], w: 18, c: s => s.flags.job, t: "你拿到了人生第一笔像样的工资，请全家吃了顿大餐。", e: { money: 1 } }),
+  E({ a: [24, 30], w: 16, c: s => s.flags.job === "white" || s.flags.job === "elite", t: "项目上线连续加班一个月，你梦里都在改 bug。", e: { str: -1, money: 1 } }),
+  E({ a: [25, 32], w: 14, c: s => (s.int >= 7 || s.sp.has("social")) && s.flags.job, t: "你升职加薪，带上了小团队。", e: { money: 1 } }),
+  E({ a: [25, 28], w: 10, t: "你一时冲动裸辞，穷游了三个月，回来重新投简历。", e: { money: -1, app: 1 } }),
+  E({ a: [26, 34], w: 16, c: s => !s.flags.love && s.flags.edu >= 0, t: s => {
+    if (s.app >= 5 || s.money >= 5 || s.sp.has("taohua")) { s.flags.love = true; return "七大姑八大姨安排的相亲，居然真的让你遇到了对的人。"; }
+    return "你相了八次亲，对方听完你的存款后都选择了再见。";
+  } }),
+  E({ a: [26, 35], w: 18, c: s => s.flags.love && !s.flags.married, f: s => { s.flags.married = true; }, t: "你和相恋多年的恋人领证结婚了，婚礼上你哭得稀里哗啦。" }),
+  E({ a: [27, 35], w: 10, c: s => s.flags.job, t: "公司业务收缩，你被「优化」了。你在家躺了两周，决定重新出发。", e: { money: -1, int: 1 } }),
+  E({ a: [28, 33], w: 10, c: s => s.int >= 7 || s.sp.has("business"), f: s => { s.flags.startup = true; }, t: "你辞掉工作开始创业，每天睡四小时，眼里全是光。", e: { money: -1 } }),
+  E({ a: [28, 30], w: 12, c: s => s.sp.has("shidai"), t: "你敏锐地嗅到了互联网的浪潮，果断转行吃到了第一波红利。", e: { money: 2, int: 1 } }),
+  E({ a: [28, 35], w: 14, c: s => s.money >= 5 && !s.flags.house, f: s => { s.flags.house = true; }, t: "你掏空六个钱包付了首付，成为了一名光荣的房奴。", e: { money: -1 } }),
+
+  // ---------- 中年 30-45 ----------
+  E({ a: [30, 30], m: 1, once: 1, t: s => s.flags.married ? "三十而立。你看着身边的家人，觉得再累也值得。" : "三十岁了，你依然一个人吃饭，但你觉得这样也挺好。" }),
+  E({ a: [30, 38], w: 18, c: s => s.flags.married && !s.flags.children, f: s => { s.flags.children = true; }, t: "你的孩子出生了。你看着那个小家伙，突然明白了什么叫责任。" }),
+  E({ a: [32, 38], w: 14, c: s => s.flags.startup, t: s => {
+    if (s.int >= 6 || s.sp.has("business") || s.sp.has("jinli")) { s.flags.rich = 1; return "你的公司拿到了融资！团队从 3 个人扩张到 300 人。"; }
+    s.flags.startup = false; return "创业失败了。你卖掉设备还了债，重新找了个班上。";
+  }, e: s => (s.int >= 6 || s.sp.has("business") || s.sp.has("jinli")) ? { money: 3 } : { money: -1 } }),
+  E({ a: [33, 40], w: 12, c: s => s.money >= 4, t: "你听消息炒股，买什么什么跌，被深深套牢。", e: { money: -1 } }),
+  E({ a: [33, 40], w: 10, c: s => s.sp.has("business") && s.money >= 3, t: "你倒腾副业做得风生水起，睡后收入超过了工资。", e: { money: 2 } }),
+  E({ a: [34, 40], w: 12, c: s => s.flags.house && s.sp.has("shidai"), t: "你多年前买的房子翻了一倍，你逢人就说自己有眼光。", e: { money: 2 } }),
+  E({ a: [35, 45], w: 14, c: s => s.str <= 4, t: "体检报告出来了，医生指着箭头让你少熬夜多运动。", e: { str: -1 } }),
+  E({ a: [36, 44], w: 12, c: s => s.flags.job, t: "开会时你被领导当众批评，晚上你在停车场里坐了很久才上楼。" }),
+  E({ a: [37, 45], w: 12, c: s => s.money >= 3 && (s.int >= 5 || s.sp.has("business")), t: "你抓住短视频风口搞直播，意外地火了。", e: { money: 2 } }),
+  E({ a: [40, 40], m: 1, once: 1, t: "四十不惑。你早上醒来第一件事，是给自己泡了杯枸杞茶。" }),
+  E({ a: [42, 48], w: 14, c: s => s.flags.children, t: "孩子要上补习班，一节课顶你半个月工资。", e: { money: -1 } }),
+  E({ a: [44, 50], w: 10, t: "同学聚会上有人开豪车有人掉头发，你笑着敬了大家一杯。" }),
+
+  // ---------- 中老年 46-59 ----------
+  E({ a: [46, 50], w: 16, t: "你低头一看，肚腩已经遮住了鞋面，岁月这把杀猪刀不挑人。", e: { app: -1, str: -1 } }),
+  E({ a: [48, 52], w: 12, c: s => s.flags.children, t: "孩子进了青春期，和你大吵一架摔门而去，你叹了口气。" }),
+  E({ a: [50, 50], m: 1, once: 1, t: "五十知天命。你开始盘手串，保温杯里泡着枸杞和人生。" }),
+  E({ a: [52, 58], w: 10, t: "一位老同学突然离世，你愣了很久，开始认真锻炼身体。", e: { str: 1 } }),
+  E({ a: [55, 59], w: 14, c: s => s.str >= 6, t: "你坚持锻炼多年，体检报告全是绿色的箭头，医生都夸你。", e: { app: 1 } }),
+  E({ a: [56, 60], w: 12, c: s => s.flags.children && s.flags.children && s.age >= 56, t: "你的孩子成家了，你翻出了压箱底的存折。", e: { money: -1 } }),
+  E({ a: [58, 62], w: 12, c: s => s.flags.children && s.flags.married, t: "你升级当爷爷/奶奶了！你抱着孙子笑出了满脸褶子。" }),
+
+  // ---------- 老年 60+ ----------
+  E({ a: [60, 60], m: 1, once: 1, t: s => s.money >= 5 ? "你光荣退休了，退休金足够你环游世界。" : "你退休了，盘算着退休金，决定跳广场舞也要跳出精气神。" }),
+  E({ a: [61, 70], w: 18, t: "你成了广场舞 C 位，领舞的水平让整个小区折服。", e: { str: 1 } }),
+  E({ a: [62, 72], w: 14, c: s => s.int >= 5, t: "你报了老年大学，书法班上你写得一手好字。", e: { int: 1 } }),
+  E({ a: [65, 75], w: 14, c: s => s.flags.children, t: "你每天接孙子上学，书包比你当年轻多了。" }),
+  E({ a: [66, 70], w: 10, c: s => s.sp.has("xiuxian"), once: 1, t: "你在山中静坐时，忽然感应到一丝天地灵气。你决定开始修炼。" }),
+  E({ a: [70, 70], m: 1, once: 1, t: "古稀之年。你儿孙绕膝，院子里的枣树也结果了。" }),
+  E({ a: [72, 78], w: 10, c: s => s.flags.house && s.money <= 7, t: "好消息！你家老房子拆迁了，补偿款到账那一刻你手都在抖。", e: { money: 4 } }),
+  E({ a: [74, 80], w: 12, c: s => s.sp.has("xiuxian"), once: 1, t: "你进山闭关，辟谷三月，只饮晨露。家人以为你走火入魔，其实你气色越来越好。" }),
+  E({ a: [78, 88], w: 14, c: s => s.str <= 3, t: "一场重病后你躺在床上，儿女轮流照顾你。", e: { str: -1 } }),
+  E({ a: [80, 80], m: 1, once: 1, t: "你八十大寿，四世同堂，寿宴摆了整整三十桌。" }),
+  E({ a: [85, 100], w: 10, once: 1, t: "你被电视台评为「长寿之星」，记者问你秘诀，你说：少管闲事。" }),
+  E({ a: [90, 120], w: 10, once: 1, t: "九十高龄的你每天还能绕小区走三圈，邻居都说你是奇迹。" }),
+
+  // ---------- 渡劫线（修仙） ----------
+  E({ a: [80, 118], w: 6, c: s => s.sp.has("xiuxian") && s.str >= 5 && !s.flags.ascend, t: s => {
+    if (Math.random() < 0.35) { s.flags.ascend = true; s.life += 150;
+      return "雷云汇聚，紫气东来！你渡劫成功，肉身化虹，飞升仙界，从此跳出三界外！"; }
+    return "你尝试渡劫，被天雷劈得外焦里嫩，好在道行深厚，捡回一条命。";
+  }, e: s => (s.flags.ascend ? { str: 2 } : { str: -1 }) }),
+  E({ a: [80, 118], w: 5, c: s => s.sp.has("xiuxian") && s.str < 5, t: "你强行冲关渡劫，气血逆流，走火入魔。", e: { str: -2 } }),
+
+  // ---------- 仙界限（飞升之后） ----------
+  E({ x: 1, a: [80, 280], m: 1, once: 1, c: s => s.flags.ascend, t: "你飞升仙界，位列人仙。南天门前的守将验明仙籍，朝你拱手道贺。" }),
+  E({ x: 1, a: [80, 280], once: 1, c: s => s.flags.ascend, t: "你拜入仙门，掌门见你根基深厚，破例收为亲传弟子。", e: { int: 1 } }),
+  E({ x: 1, a: [80, 280], once: 1, c: s => s.flags.ascend, t: "你在洞府闭关，一甲子转瞬即逝，你突破地仙境界，仙力如江河奔涌。", e: { str: 1, int: 1 } }),
+  E({ x: 1, a: [80, 280], once: 1, c: s => s.flags.ascend, t: "王母娘娘的蟠桃会给你下了请帖，你分得一枚三千年仙桃，寿元大增。", e: { str: 1 } }),
+  E({ x: 1, a: [80, 280], once: 1, c: s => s.flags.ascend, t: "你炼成第一炉九转金丹，仙门上下争相讨要。", e: { int: 1 } }),
+  E({ x: 1, a: [80, 280], once: 1, c: s => s.flags.ascend, t: "你下凡历劫，化作樵夫在人间过了十年，勘破红尘，道心更坚。", e: { int: 1 } }),
+  E({ x: 1, a: [80, 280], once: 1, c: s => s.flags.ascend, t: "你在仙界收下第一个徒弟，这孩子天资卓绝，颇有你当年的影子。", e: { app: 1 } }),
+  E({ x: 1, a: [80, 280], once: 1, c: s => s.flags.ascend, t: "你与仙友论道七天七夜，各自道行精进。", e: { int: 1, str: 1 } }),
+  // 可重复的仙界日常
+  E({ x: 1, a: [80, 280], w: 20, c: s => s.flags.ascend, t: "你在云海间打坐吐纳，吞吐日月精华。", e: { str: 1 } }),
+  E({ x: 1, a: [80, 280], w: 16, c: s => s.flags.ascend, t: "你游历四大部洲，斩妖除魔，人间香火不断。" }),
+  E({ x: 1, a: [80, 280], w: 16, c: s => s.flags.ascend, t: "你云游四海，在东海龙宫做客，龙女亲自为你斟酒。" }),
+  E({ x: 1, a: [80, 280], w: 14, c: s => s.flags.ascend, t: "你炼器失败，炸了半座山头，被掌门罚去扫丹房。" }),
+  E({ x: 1, a: [80, 280], w: 14, c: s => s.flags.ascend, t: "你在仙界开了间茶馆，专给路过的仙人续命神水，倒也悠闲。" }),
+  // 证道混元（终极结局）
+  E({ x: 1, a: [200, 280], w: 8, c: s => s.flags.ascend, t: s => {
+    if (Math.random() < 0.4) { s.dead = true; s.cause = "hunyuan";
+      return "你勘破大道玄机，证道混元，与天道齐肩，从此万劫不磨！"; }
+    return "你冲击混元大道，天雷滚滚，最终功亏一篑，道心险些失守。";
+  }, e: s => (s.dead ? null : { str: -1 }) })
+];
+
+// ==================== 游戏核心 ====================
+function drawTalents() {
+  const pool = TALENTS.map(t => t);
+  const picked = [];
+  while (picked.length < 10 && pool.length) {
+    const t = pickWeighted(pool, x => RARITY[x.r].w);
+    pool.splice(pool.indexOf(t), 1);
+    picked.push(t);
+  }
+  return picked;
+}
+
+function calcLife(s, lifeBonus) {
+  return 55 + s.str * 2 + rnd(0, 20) + lifeBonus;
+}
+
+function newLife(picked, base) {
+  const s = {
+    age: 0,
+    app: cap10(base.app), int: cap10(base.int), str: cap10(base.str), money: cap10(base.money),
+    flags: { edu: -1, high: 0, love: false, married: false, children: false, house: false, startup: false, rich: 0, ascend: false },
+    once: {}, sp: new Set(picked.filter(t => t.sp).map(t => t.sp)),
+    dead: false, cause: "", log: []
+  };
+  let lifeBonus = 0;
+  for (const t of picked) if (t.life) lifeBonus += t.life;
+  s.life = calcLife(s, lifeBonus);
+  return s;
+}
+
+function applyDelta(s, delta) {
+  if (!delta) return;
+  const names = { app: "颜值", int: "智力", str: "体质", money: "家境" };
+  const shown = {};
+  for (const k of ["app", "int", "str", "money"]) {
+    const v = delta[k] || 0;
+    if (!v) continue;
+    const before = s[k];
+    s[k] = cap10(s[k] + v);
+    const real = s[k] - before;
+    if (real !== 0) shown[k] = real;
+  }
+  if (s.str <= 0 && !s.dead) { s.dead = true; s.cause = "weak"; }
+  return shown;
+}
+
+function runYear(s) {
+  const pool = [];
+  for (const ev of EVENTS) {
+    if (s.age < ev.a[0] || s.age > ev.a[1]) continue;
+    if (ev.once && s.once[ev.id]) continue;
+    // 仙界事件只在飞升后触发，凡间事件只在飞升前触发
+    if (ev.x && !s.flags.ascend) continue;
+    if (!ev.x && s.flags.ascend) continue;
+    if (ev.c && !ev.c(s)) continue;
+    pool.push(ev);
+  }
+  if (!pool.length) return;
+  const ms = pool.filter(ev => ev.m);
+  const chosen = pickWeighted(ms.length ? ms : pool, ev => {
+    let w = ev.w || 10;
+    const e = ev.e;
+    const good = e && (typeof e === "function"
+      ? [1, 1, 1, 1].some((_, i) => (e(s) || {})[["app", "int", "str", "money"][i]] > 0)
+      : ["app", "int", "str", "money"].some(k => e[k] > 0));
+    if (s.sp.has("jinli")) return good ? w * 3 : w * (ev.c && String(ev.c).includes("str < 5") || String(ev.t || "").includes("走火入魔") ? 0.3 : 1);
+    return w;
+  });
+  if (!chosen) return;
+  if (chosen.once) s.once[chosen.id] = 1;
+
+  let text = typeof chosen.t === "function" ? chosen.t(s) : chosen.t;
+  // 天煞孤星：挫折变强
+  if (s.sp.has("guxing")) {
+    const e0 = typeof chosen.e === "function" ? chosen.e(s) : chosen.e;
+    if (e0 && Object.values(e0).some(v => v < 0)) {
+      s.int = cap10(s.int + 1);
+      text += "（天煞孤星：你在磨难中悟了，智力 +1）";
+    }
+  }
+  let shown = null;
+  if (chosen.e) shown = applyDelta(s, typeof chosen.e === "function" ? chosen.e(s) : chosen.e);
+  s.log.push({ age: s.age, text: text, delta: shown, type: chosen.m ? "milestone" : "normal" });
+
+  // 天选之子 / 阳光开朗：随机好运
+  if (!s.dead && (s.sp.has("tianxuan") || (s.sp.has("sunny") && s.age <= 12)) && Math.random() < 0.04) {
+    const luckies = [
+      { t: "你出门踩到狗屎运，买饮料「再来一瓶」。", e: { app: 1 } },
+      { t: "你随手买的彩票中了个小奖，晚上加了个鸡腿。", e: { money: 1 } },
+      { t: "你扶老奶奶过马路，被路人拍下发到网上，全网夸你。", e: { app: 1 } },
+      { t: "你打个喷嚏都觉得很痛快，今天诸事皆宜。", e: { str: 1 } }
+    ];
+    const lk = luckies[rnd(0, luckies.length - 1)];
+    const sh = applyDelta(s, lk.e);
+    s.log.push({ age: s.age, text: "【好运降临】" + lk.t, delta: sh, type: "good" });
+  }
+}
+
+function deathCheck(s) {
+  if (s.dead) return;
+  // 仙人寿与天齐，只会因寿元耗尽或证道混元而终结，不再受凡人疾苦
+  if (s.flags.ascend) {
+    if (s.age >= s.life) { s.dead = true; s.cause = "old"; }
+    return;
+  }
+  if (s.age >= s.life) { s.dead = true; s.cause = "old"; return; }
+  let p = 0.0008;
+  if (s.age < 10) p = 0.001 + (s.str <= 2 ? 0.012 : 0);
+  else if (s.age < 40) p = 0.0008 + (s.str <= 2 ? 0.006 : 0);
+  else if (s.age < 60) p = 0.003;
+  else if (s.age < 75) p = 0.015;
+  else if (s.age < 90) p = 0.05;
+  else p = 0.12;
+  if (s.sp.has("jinli")) p *= 0.5;
+  if (Math.random() < p) {
+    s.dead = true;
+    if (s.age >= 70) s.cause = "sickold";
+    else s.cause = Math.random() < 0.5 ? "accident" : "sick";
+  }
+}
+
+function endLife(s) {
+  let text;
+  switch (s.cause) {
+    case "ascend": text = "渡劫飞升，位列仙班。"; break;
+    case "hunyuan": text = "你证道混元，与天道齐肩，从此万劫不磨。"; break;
+    case "old": text = s.flags.ascend
+      ? "你于仙界静坐千年，寿元耗尽，安然坐化，仙骨不腐。"
+      : (rnd(0, 1) ? "你在睡梦中安详离世，嘴角还带着微笑。" : "夕阳下你摇着藤椅，慢慢地睡着了，再也没有醒来。"); break;
+    case "sickold": text = "你终究没能扛过这场病，儿孙们守在床前送你最后一程。"; break;
+    case "accident": text = "一场意外毫无征兆地降临，你的人生戛然而止。"; break;
+    case "weak": text = "羸弱的身体终于撑不住了，你带着遗憾匆匆离场。"; break;
+    default: text = "你的人生到此为止了。";
+  }
+  s.log.push({ age: s.age, text: text, type: "death" });
+
+  // 评分
+  let score = (s.app + s.int + s.str + s.money) * 3 + Math.round(s.age * 0.6);
+  const ach = [];
+  if (s.flags.edu >= 4) { score += 30; ach.push("顶尖名校毕业"); }
+  else if (s.flags.edu === 3) { score += 15; ach.push("重点大学毕业"); }
+  else if (s.flags.edu === 2) { score += 8; ach.push("本科毕业"); }
+  if (s.flags.house) { score += 10; ach.push("有房一族"); }
+  if (s.flags.married) { score += 10; ach.push("喜结良缘"); }
+  if (s.flags.children) { score += 10; ach.push("养育后代"); }
+  if (s.flags.rich) { score += 25; ach.push("创业有成"); }
+  if (s.money >= 8) { score += 20; ach.push("富甲一方"); }
+  if (s.age >= 90) { score += 20; ach.push("九十高寿"); }
+  if (s.age >= 100) { score += 30; ach.push("世纪老人"); }
+  if (s.flags.ascend) { score += 150; ach.push("渡劫飞升"); }
+  if (s.cause === "hunyuan") { score += 250; ach.push("证道混元"); }
+  for (const t of arguments[1] || []) { if (RARITY[t.r].w <= 6) { score += 10; ach.push("传说天赋·" + t.n); } }
+
+  let title;
+  if (s.cause === "hunyuan") title = "证道混元 · 万劫不磨";
+  else if (s.flags.ascend) title = "渡劫飞升 · 位列仙班";
+  else if (score >= 160) title = "人间神话";
+  else if (score >= 130) title = "传奇人生";
+  else if (score >= 100) title = "精彩纷呈";
+  else if (score >= 70) title = "有滋有味";
+  else if (score >= 40) title = "平凡之路";
+  else title = "建议重开";
+
+  return {
+    log: s.log, age: s.age, score: score, title: title, cause: text,
+    final: { app: s.app, int: s.int, str: s.str, money: s.money },
+    ach: ach
+  };
+}
+
+function runLife(picked, base) {
+  const s = newLife(picked, base);
+  const MAX_AGE = 400;
+  while (!s.dead && s.age < MAX_AGE) {
+    runYear(s);
+    if (!s.dead) deathCheck(s);
+    if (!s.dead) s.age++;
+  }
+  return endLife(s, picked);
+}
+
+// ==================== UI ====================
+if (typeof document !== "undefined") {
+  const $ = id => document.getElementById(id);
+  const PNAME = { app: "颜值", int: "智力", str: "体质", money: "家境" };
+  let pickedTalents = [];
+  let drawn = [];
+  let rerollLeft = 1;
+  let alloc = { app: 5, int: 5, str: 5, money: 5 };
+  let playTimer = null;
+
+  function show(id) {
+    document.querySelectorAll(".screen").forEach(x => x.classList.remove("active"));
+    $(id).classList.add("active");
+  }
+
+  // ---- 天赋屏 ----
+  function renderTalents() {
+    const g = $("talentGrid");
+    g.innerHTML = "";
+    drawn.forEach((t, i) => {
+      const d = document.createElement("div");
+      d.className = "talent" + (pickedTalents.includes(t) ? " picked" : "");
+      d.innerHTML = `<div class="tname">${t.n}</div><div class="tdesc">${t.d}</div>` +
+        `<div class="trarity" style="color:${RARITY[t.r].color}">${RARITY[t.r].name}</div>`;
+      d.onclick = () => {
+        const idx = pickedTalents.indexOf(t);
+        if (idx >= 0) pickedTalents.splice(idx, 1);
+        else {
+          if (pickedTalents.length >= 3) { $("talentWarn").textContent = "最多只能选 3 个天赋！"; return; }
+          $("talentWarn").textContent = "";
+          pickedTalents.push(t);
+        }
+        renderTalents();
+        $("btnTalentOk").disabled = pickedTalents.length === 0;
+      };
+      g.appendChild(d);
+    });
+    $("rerollLeft").textContent = rerollLeft;
+    $("btnReroll").disabled = rerollLeft <= 0;
+  }
+
+  $("btnStart").onclick = () => {
+    drawn = drawTalents(); pickedTalents = []; rerollLeft = 1;
+    renderTalents(); show("scr-talent");
+  };
+  $("btnReroll").onclick = () => {
+    if (rerollLeft <= 0) return;
+    rerollLeft--; drawn = drawTalents(); pickedTalents = [];
+    renderTalents();
+  };
+  $("btnTalentOk").onclick = () => { renderAlloc(); show("scr-alloc"); };
+
+  // ---- 属性分配 ----
+  function renderAlloc() {
+    const box = $("allocBox");
+    box.innerHTML = "";
+    let used = Object.values(alloc).reduce((a, b) => a + b, 0);
+    for (const k of ["app", "int", "str", "money"]) {
+      const row = document.createElement("div");
+      row.className = "alloc-row";
+      row.innerHTML = `<div class="pname">${PNAME[k]}</div>
+        <div class="stepper"><button data-k="${k}" data-d="-1">−</button></div>
+        <div class="pval" id="v-${k}">${alloc[k]}</div>
+        <div class="stepper"><button data-k="${k}" data-d="1">＋</button></div>`;
+      box.appendChild(row);
+    }
+    box.querySelectorAll("button").forEach(b => {
+      b.onclick = () => {
+        const k = b.dataset.k, d = +b.dataset.d;
+        const used2 = Object.values(alloc).reduce((a, c) => a + c, 0);
+        if (d > 0 && (used2 >= 20 || alloc[k] >= 10)) return;
+        if (d < 0 && alloc[k] <= 0) return;
+        alloc[k] += d;
+        $("v-" + k).textContent = alloc[k];
+        updatePoints();
+      };
+    });
+    updatePoints();
+  }
+  function updatePoints() {
+    const used = Object.values(alloc).reduce((a, b) => a + b, 0);
+    $("pointsLeft").innerHTML = `剩余点数：<b>${20 - used}</b>`;
+    $("btnGo").disabled = used !== 20;
+  }
+  $("btnRandomAlloc").onclick = () => {
+    let left = 20;
+    alloc = { app: 0, int: 0, str: 0, money: 0 };
+    for (const k of ["app", "int", "str", "money"]) { alloc[k] = rnd(1, 6); left -= alloc[k]; }
+    while (left > 0) { const k = ["app", "int", "str", "money"][rnd(0, 3)]; if (alloc[k] < 10) { alloc[k]++; left--; } }
+    renderAlloc();
+  };
+  $("btnGo").onclick = startLife;
+
+  // ---- 人生播放 ----
+  let speed = 350;
+  function renderHud(s) {
+    $("hud").innerHTML = ["app", "int", "str", "money"].map(k =>
+      `<div class="chip"><div class="cl">${PNAME[k]}</div><div class="cv" id="hud-${k}">${s[k]}</div></div>`).join("");
+  }
+  function fmtDelta(d) {
+    if (!d) return "";
+    return Object.entries(d).map(([k, v]) =>
+      `<span class="delta ${v > 0 ? "up" : "down"}">${PNAME[k]}${v > 0 ? "+" : ""}${v}</span>`).join("");
+  }
+  function startLife() {
+    // 应用天赋加成
+    const base = { ...alloc };
+    for (const t of pickedTalents) {
+      if (t.eff) for (const k in t.eff) base[k] = cap10(base[k] + t.eff[k]);
+    }
+    const state = newLife(pickedTalents, base);
+    const MAX_AGE = 400;
+    while (!state.dead && state.age < MAX_AGE) {
+      runYear(state);
+      if (!state.dead) deathCheck(state);
+      if (!state.dead) state.age++;
+    }
+    const result = endLife(state, pickedTalents);
+    playLog(result);
+  }
+  function playLog(result) {
+    show("scr-life");
+    $("logBox").innerHTML = "";
+    // HUD 用终值初始化，播放时随事件回放数值变化
+    const running = { app: result.final.app, int: result.final.int, str: result.final.str, money: result.final.money };
+    // 反推初始值
+    const start = { ...running };
+    for (const l of result.log) if (l.delta) for (const k in l.delta) start[k] -= l.delta[k];
+    for (const k in start) start[k] = Math.max(0, Math.min(10, start[k]));
+    renderHud(start);
+    let i = 0;
+    clearInterval(playTimer);
+    playTimer = setInterval(() => {
+      if (i >= result.log.length) { clearInterval(playTimer); showSummary(result); return; }
+      const l = result.log[i++];
+      const div = document.createElement("div");
+      div.className = "line " + l.type;
+      div.innerHTML = `<span class="ageTag">${l.age}岁</span>${l.text}${fmtDelta(l.delta)}`;
+      $("logBox").appendChild(div);
+      $("logBox").scrollTop = $("logBox").scrollHeight;
+      if (l.delta) {
+        for (const k in l.delta) {
+          const cur = parseInt($("hud-" + k).textContent) || 0;
+          const nv = Math.max(0, Math.min(10, cur + l.delta[k]));
+          const el = $("hud-" + k);
+          el.textContent = nv;
+          el.classList.remove("bump"); void el.offsetWidth; el.classList.add("bump");
+        }
+      }
+    }, speed);
+  }
+  $("btnSpeed").onclick = () => { speed = speed === 350 ? 60 : 350; $("btnSpeed").textContent = speed === 350 ? "⏩ 加速" : "🐢 正常"; };
+  $("btnSkip").onclick = () => { speedOnce(); };
+  function speedOnce() {
+    clearInterval(playTimer);
+    speed = 1;
+    // 直接重播剩余内容：简单做法——立即播完由内部处理
+    // 找到当前正在播的 result：保存到全局
+    if (window._currentResult) {
+      // 一次性渲染剩余
+      const box = $("logBox");
+      const all = window._currentResult.log;
+      const shown = box.children.length;
+      for (let j = shown; j < all.length; j++) {
+        const l = all[j];
+        const div = document.createElement("div");
+        div.className = "line " + l.type;
+        div.innerHTML = `<span class="ageTag">${l.age}岁</span>${l.text}${fmtDelta(l.delta)}`;
+        box.appendChild(div);
+      }
+      box.scrollTop = box.scrollHeight;
+      showSummary(window._currentResult);
+    }
+  }
+  const _origPlay = playLog;
+  playLog = function (result) {
+    window._currentResult = result;
+    speed = 350;
+    $("btnSpeed").textContent = "⏩ 加速";
+    $("btnSpeed").style.display = "";
+    $("btnSkip").style.display = "";
+    $("btnBackToEnd").style.display = "none";
+    _origPlay(result);
+  };
+
+  // ---- 结算 ----
+  function showSummary(result) {
+    show("scr-end");
+    $("sumTitle").textContent = result.title;
+    $("sumScore").innerHTML = `${result.score}<br><small>人生总评分</small>`;
+    $("sumGrid").innerHTML = ["app", "int", "str", "money"].map(k =>
+      `<div class="cell"><div class="l">${PNAME[k]}</div><div class="v">${result.final[k]}</div></div>`).join("") +
+      `<div class="cell"><div class="l">享年</div><div class="v">${result.age}</div></div>`;
+    $("sumCause").textContent = result.cause;
+    $("achList").innerHTML = result.ach.length
+      ? result.ach.map(a => `<li>${a}</li>`).join("")
+      : "<li style='color:#6b6b85'>平平安安，已是圆满</li>";
+  }
+  $("btnRestart").onclick = () => { show("scr-start"); };
+
+  // ---- 回顾一生 ----
+  function renderFullLog(result) {
+    $("logBox").innerHTML = "";
+    const box = $("logBox");
+    for (const l of result.log) {
+      const div = document.createElement("div");
+      div.className = "line " + l.type;
+      div.innerHTML = `<span class="ageTag">${l.age}岁</span>${l.text}${fmtDelta(l.delta)}`;
+      box.appendChild(div);
+    }
+    box.scrollTop = 0;
+    // 展示最终属性
+    renderHud(result.final);
+  }
+  $("btnReview").onclick = () => {
+    if (!window._currentResult) return;
+    clearInterval(playTimer);
+    renderFullLog(window._currentResult);
+    $("btnBackToEnd").style.display = "inline-block";
+    $("btnSpeed").style.display = "none";
+    $("btnSkip").style.display = "none";
+    show("scr-life");
+  };
+  $("btnBackToEnd").onclick = () => {
+    $("btnBackToEnd").style.display = "none";
+    $("btnSpeed").style.display = "";
+    $("btnSkip").style.display = "";
+    show("scr-end");
+  };
+}
+</script>
+</body>
+</html>
